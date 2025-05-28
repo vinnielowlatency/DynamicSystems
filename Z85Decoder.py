@@ -38,11 +38,10 @@ def z85_decode(char1, char2, char3, char4, char5):
    
    return byte1, byte2, byte3, byte4
 
-# Example usage
+
 def main():
    # Take input from user
    encoded = input("Enter 5 Z85 characters: ")
-   
    if len(encoded) != 5:
        print("Error: Z85 decode requires exactly 5 characters")
        return
@@ -50,13 +49,7 @@ def main():
    try:
        # Decode the input
        byte1, byte2, byte3, byte4 = z85_decode(encoded[0], encoded[1], encoded[2], encoded[3], encoded[4])
-       
-       # Display the decoded bytes
-       print(f"Decoded bytes (decimal): {byte1}, {byte2}, {byte3}, {byte4}")
-       
-       # Display as hexadecimal
-       print(f"Decoded bytes (hex): 0x{byte1:02X}, 0x{byte2:02X}, 0x{byte3:02X}, 0x{byte4:02X}")
-       
+        
        # Display as ASCII if printable
        ascii_chars = []
        for byte in [byte1, byte2, byte3, byte4]:
