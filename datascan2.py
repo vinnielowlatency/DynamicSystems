@@ -176,7 +176,7 @@ class LargeCacheDataExtractor:
         inst_ratios = {}
         data_ratios = {}
         
-        print(f"\n🔍 Processing {app_name.upper()} - Large Cache Data (Section 2):")
+        print(f"\n Processing {app_name.upper()} - Large Cache Data (Section 2):")
         print("=" * 60)
         
         files_found = 0
@@ -188,53 +188,53 @@ class LargeCacheDataExtractor:
             
             if os.path.exists(filename):
                 files_found += 1
-                print(f"  📁 Found {filename} ({size_label})")
+                print(f"   Found {filename} ({size_label})")
                 
                 inst_ratio, data_ratio = self.extract_hit_ratios(filename)
                 if inst_ratio is not None and data_ratio is not None:
                     inst_ratios[size] = inst_ratio
                     data_ratios[size] = data_ratio
                     files_processed += 1
-                    print(f"    ✓ Extracted: I={inst_ratio:.6f}, D={data_ratio:.6f}")
+                    print(f"     Extracted: I={inst_ratio:.6f}, D={data_ratio:.6f}")
                 else:
-                    print(f"    ✗ Failed to extract hit ratios")
+                    print(f"     Failed to extract hit ratios")
             else:
                 print(f"  - Missing {filename} ({size_label})")
         
-        print(f"\n📊 Summary for {app_name}:")
+        print(f"\n Summary for {app_name}:")
         print(f"  Files found: {files_found}/{len(self.large_cache_sizes)}")
         print(f"  Files processed: {files_processed}/{files_found}")
         
         if files_processed == 0:
-            print(f"  ⚠️  No .txt files could be processed for {app_name}")
+            print(f"    No .txt files could be processed for {app_name}")
             return
             
         # Update existing .dat files
         inst_file = f"instruction-{app_name}.dat"
         data_file = f"data-{app_name}.dat"
         
-        print(f"\n📝 Updating .dat files for {app_name}:")
+        print(f"\n Updating .dat files for {app_name}:")
         
         if os.path.exists(inst_file) and inst_ratios:
-            print(f"  🔄 Updating {inst_file}...")
+            print(f"   Updating {inst_file}...")
             self.update_dat_file(inst_file, inst_ratios)
         elif not os.path.exists(inst_file):
-            print(f"  ⚠️  Warning: {inst_file} does not exist")
+            print(f"    Warning: {inst_file} does not exist")
         elif not inst_ratios:
-            print(f"  ℹ️  No instruction cache data to update {inst_file}")
+            print(f"    No instruction cache data to update {inst_file}")
             
         if os.path.exists(data_file) and data_ratios:
-            print(f"  🔄 Updating {data_file}...")
+            print(f"   Updating {data_file}...")
             self.update_dat_file(data_file, data_ratios)
         elif not os.path.exists(data_file):
-            print(f"  ⚠️  Warning: {data_file} does not exist")
+            print(f"    Warning: {data_file} does not exist")
         elif not data_ratios:
-            print(f"  ℹ️  No data cache data to update {data_file}")
+            print(f"    No data cache data to update {data_file}")
     
     def test_large_cache_files(self):
         """Test the extractor with any available large cache files."""
         print("=" * 70)
-        print("🧪 TESTING LARGE CACHE DATA EXTRACTOR")
+        print(" TESTING LARGE CACHE DATA EXTRACTOR")
         print("=" * 70)
         
         print("Looking for large cache test files...")
@@ -249,7 +249,7 @@ class LargeCacheDataExtractor:
                     total_files_found += 1
             
             if app_files:
-                print(f"\n📱 {app.upper()} files found:")
+                print(f"\n {app.upper()} files found:")
                 for filename, size_label in app_files:
                     inst_ratio, data_ratio = self.extract_hit_ratios(filename)
                     print(f"  {filename} ({size_label}):")
@@ -257,16 +257,16 @@ class LargeCacheDataExtractor:
                     print(f"    Data Hit Ratio: {data_ratio}")
         
         if total_files_found == 0:
-            print("\n❌ No large cache .txt files found in current directory.")
+            print("\n No large cache .txt files found in current directory.")
             print("Expected files like: nasa7-131072.txt, su2-1048576.txt, etc.")
             print("Make sure you've run the spec-dm-big-run script first.")
         else:
-            print(f"\n✅ Found {total_files_found} large cache test files total.")
+            print(f"\n Found {total_files_found} large cache test files total.")
     
     def fill_all_large_cache_data(self):
         """Fill all SPEC92 large cache .dat files."""
         print("=" * 70)
-        print("🚀 LARGE CACHE HIT RATIO EXTRACTOR (SECTION 2)")
+        print(" LARGE CACHE HIT RATIO EXTRACTOR (SECTION 2)")
         print("=" * 70)
         print("Processing SPEC92 Applications - Large Cache Data (128KB - 8MB)")
         print("Applications: nasa7, su2, swm, wave")
@@ -279,15 +279,15 @@ class LargeCacheDataExtractor:
             total_apps_processed += 1
         
         print("=" * 70)
-        print("🎉 LARGE CACHE PROCESSING COMPLETE!")
+        print(" LARGE CACHE PROCESSING COMPLETE!")
         print("=" * 70)
-        print(f"✅ Processed {total_apps_processed} SPEC92 applications")
-        print("\n📁 Updated .dat files:")
+        print(f" Processed {total_apps_processed} SPEC92 applications")
+        print("\n Updated .dat files:")
         for app in self.spec92_apps:
             print(f"  - instruction-{app}.dat")
             print(f"  - data-{app}.dat")
         
-        print("\n🎯 Next steps:")
+        print("\n Next steps:")
         print("  1. Use gnuplot to generate large cache performance plots:")
         print("     gnuplot spec-cache-big-r2000.plt")
         print("  2. View the generated plots: spec92-dm-big.ps or spec92-dm-big.png")
