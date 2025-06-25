@@ -6,24 +6,20 @@ from scipy.linalg import inv
 import seaborn as sns
 from collections import defaultdict
 
-class TennisMarkovChain:
-    """
-    Computational Markov Chain model for tennis games
-    """
-    
+class TennisMarkovChain: # Main class for instantiating tennis outcomes
     def __init__(self):
+        # Define all possible tennis game states
         self.states = [
-            '0-0', '15-0', '0-15', '15-15', '30-0', '30-15', '0-30', '15-30', '30-30',
-            '40-0', '40-15', '40-30', '0-40', '15-40', '30-40', 'DEUCE', 'ADV-A', 'ADV-B',
-            'A-WINS', 'B-WINS'
+            '0-0', '15-0', '0-15', '15-15', '30-0', '30-15', '0-30', '15-30', '30-30','40-0', '40-15', '40-30', '0-40', '15-40', '30-40', 'DEUCE', 'ADV-A', 'ADV-B',
+            'A-WINS', 'B-WINS' # Seperation of absorption states 
         ]
-        
     def build_transition_matrix(self, p):
-        """Build transition matrix for point probability p"""
+        # given p, create 20x20 matrix
         n = len(self.states)
         P = np.zeros((n, n))
+        # Create mapping from states to matrix indexes
         state_idx = {state: i for i, state in enumerate(self.states)}
-        
+        # state maps to tuple of next possible states and probabilities
         transitions = {
             '0-0': [('15-0', p), ('0-15', 1-p)],
             '15-0': [('30-0', p), ('15-15', 1-p)],
@@ -34,6 +30,7 @@ class TennisMarkovChain:
             '0-30': [('15-30', p), ('0-40', 1-p)],
             '15-30': [('30-30', p), ('15-40', 1-p)],
             '30-30': [('40-30', p), ('30-40', 1-p)],
+            # transitions from advantage states
             '40-0': [('A-WINS', p), ('40-15', 1-p)],
             '40-15': [('A-WINS', p), ('40-30', 1-p)],
             '40-30': [('A-WINS', p), ('DEUCE', 1-p)],
@@ -43,114 +40,125 @@ class TennisMarkovChain:
             'DEUCE': [('ADV-A', p), ('ADV-B', 1-p)],
             'ADV-A': [('A-WINS', p), ('DEUCE', 1-p)],
             'ADV-B': [('DEUCE', p), ('B-WINS', 1-p)],
+            # absorbing states
             'A-WINS': [('A-WINS', 1.0)],
             'B-WINS': [('B-WINS', 1.0)]
         }
-        
+        # fill transition matrix with probabilities
         for state, state_transitions in transitions.items():
             from_idx = state_idx[state]
             for next_state, prob in state_transitions:
                 to_idx = state_idx[next_state]
                 P[from_idx, to_idx] = prob
-                
         return P
     
     def get_game_win_probability(self, p):
-        """Get probability A wins game using fundamental matrix"""
+        # calculate game win probability through fundamental matrix
         P = self.build_transition_matrix(p)
-        Q = P[:18, :18]  # Transient to transient
-        R = P[:18, 18:]  # Transient to absorbing
-        
+        # Q matrix (transient to transient transitions)
+        Q = P[:18, :18]  
+        # R matrix (transient to absorbing transitions)
+        R = P[:18, 18:]  
         I = np.eye(18)
         N = inv(I - Q)
-        B = N @ R
-        
-        return B[0, 0]  # Probability A wins from '0-0'
+        B = N @ R #absoprtion probabilities
+        return B[0, 0]
 
 class ComprehensiveTennisAnalysis:
-    """
-    Comprehensive multi-season tennis analysis to answer research questions
-    """
-    
     def __init__(self, sensitivity_k=2.0):
         self.markov_chain = TennisMarkovChain()
+        # sensitivity parameter to skill discrepancy for logistic modelling
         self.sensitivity_k = sensitivity_k
-        
     def generate_beta_skills(self, num_players, alpha=2, beta_param=5):
-        """Generate Beta(2,5) distributed skills"""
+        # generate realistic player skills using Beta(2,5) distribution
         skills = beta.rvs(alpha, beta_param, size=num_players)
+        # bound skills to prevent unrealistic modelling
         return np.clip(skills, 0.1, 0.9)
-    
     def skill_to_probability(self, skill_a, skill_b):
-        """Logistic transformation of skill difference to point probability"""
+        # convert skill difference to point probability using logistic function
         return 1 / (1 + np.exp(-self.sensitivity_k * (skill_a - skill_b)))
     
-    def simulate_match(self, skill_a, skill_b, sets_to_win=2):
-        """
-        Simulate complete match (best of 3 or 5 sets)
-        Returns winner index (0 for A, 1 for B)
-        """
+    def simulate_match(self, skill_a, skill_b, sets_to_win=2): #tennis game simulations
         p = self.skill_to_probability(skill_a, skill_b)
         game_win_prob = self.markov_chain.get_game_win_probability(p)
-        
         sets_a = 0
         sets_b = 0
-        
-        while sets_a < sets_to_win and sets_b < sets_to_win:
-            # Simulate set (first to 6 games, win by 2)
+        while sets_a < sets_to_win and sets_b < sets_to_win: # play sets to winning condition is met
             games_a = 0
             games_b = 0
-            
             while True:
-                # Simulate game
                 if np.random.random() < game_win_prob:
                     games_a += 1
                 else:
                     games_b += 1
-                
-                # Check set completion
                 if (games_a >= 6 or games_b >= 6) and abs(games_a - games_b) >= 2:
                     break
-                # Tiebreak at 6-6 (simplified)
                 if games_a == 6 and games_b == 6:
                     if np.random.random() < game_win_prob:
                         games_a += 1
                     else:
                         games_b += 1
                     break
-            
             if games_a > games_b:
                 sets_a += 1
             else:
                 sets_b += 1
-        
         return 0 if sets_a > sets_b else 1
     
-    def simulate_tournament(self, skills, sets_to_win=2):
-        """Simulate single elimination tournament"""
-        players = list(range(len(skills)))
+    def heuristic_seeding(self, skills, current_points): #heuristic seeding to ensure experimental robustness
+        if np.sum(current_points) == 0:
+            # first tournament seeds by skill
+            ranking = np.argsort(skills)[::-1]
+        else:
+            # all other tournaments seeded by point/rank assortment
+            ranking = np.argsort(current_points)[::-1]
+        seeded_players = []
+        n = len(ranking)
+        for i in range(n // 2):
+            seeded_players.extend([ranking[i], ranking[n - 1 - i]])
+        return seeded_players
+    
+    def simulate_tournament(self, skills, sets_to_win=2, current_points=None, use_seeding=True):
+        # Simulate single elimination tournament with optional realistic seeding
+        # Returns ID of tournament winner
         
+        # Apply seeding heuristic if enabled and points available
+        if use_seeding and current_points is not None:
+            players = self.heuristic_seeding(skills, current_points)
+        else:
+            # Random tournament order (baseline for comparison)
+            players = list(range(len(skills)))
+            np.random.shuffle(players)
+        
+        # Continue until only one player remains
         while len(players) > 1:
             next_round = []
+            
+            # Pair up players and simulate matches
             for i in range(0, len(players), 2):
                 if i + 1 < len(players):
+                    # Play match between adjacent players
                     player_a, player_b = players[i], players[i + 1]
                     winner_idx = self.simulate_match(skills[player_a], skills[player_b], sets_to_win)
                     winner = player_a if winner_idx == 0 else player_b
                     next_round.append(winner)
                 else:
-                    next_round.append(players[i])  # Bye
+                    # Odd number of players - give bye to last player
+                    next_round.append(players[i])
+                    
             players = next_round
         
         return players[0]  # Tournament winner
     
     def simulate_season(self, skills, num_tournaments, sets_to_win=2):
-        """Simulate complete season with multiple tournaments"""
+        # Simulate complete season with multiple tournaments
+        # Tracks points, rankings, and detailed tournament results
+        
         num_players = len(skills)
         player_points = np.zeros(num_players)
         tournament_wins = np.zeros(num_players)
         
-        # Tournament points system (simplified)
+        # Points awarded for different tournament results
         points_structure = {
             'winner': 100,
             'finalist': 60,
@@ -160,16 +168,27 @@ class ComprehensiveTennisAnalysis:
         
         season_data = []
         
+        # Simulate each tournament in the season
         for tournament_num in range(num_tournaments):
-            # Simulate tournament with detailed tracking
-            players = list(range(num_players))
+            # Apply seeding heuristic: use current points to create realistic brackets
+            if tournament_num == 0:
+                # First tournament: seed by true skill (pre-season rankings)
+                seeded_players = self.heuristic_seeding(skills, np.zeros(num_players))
+            else:
+                # Subsequent tournaments: seed by current season points
+                seeded_players = self.heuristic_seeding(skills, player_points)
+            
+            # Track detailed tournament progression
+            players = seeded_players
             round_results = {}
             
             round_num = 0
+            # Run tournament rounds until winner emerges
             while len(players) > 1:
                 next_round = []
                 round_results[round_num] = []
                 
+                # Play all matches in current round
                 for i in range(0, len(players), 2):
                     if i + 1 < len(players):
                         player_a, player_b = players[i], players[i + 1]
@@ -178,6 +197,8 @@ class ComprehensiveTennisAnalysis:
                         loser = player_b if winner_idx == 0 else player_a
                         
                         next_round.append(winner)
+                        
+                        # Record match details for analysis
                         round_results[round_num].append({
                             'winner': winner,
                             'loser': loser,
@@ -190,23 +211,25 @@ class ComprehensiveTennisAnalysis:
                 players = next_round
                 round_num += 1
             
-            # Award points based on final round reached
+            # Award points based on tournament performance
             winner = players[0]
             tournament_wins[winner] += 1
             player_points[winner] += points_structure['winner']
             
-            # Award points to finalists, semifinalists, etc.
+            # Award points to runner-up (finalist)
             if round_num >= 1 and round_results[round_num-1]:
                 finalist = round_results[round_num-1][0]['loser']
                 player_points[finalist] += points_structure['finalist']
             
+            # Award points to semifinalists
             if round_num >= 2:
                 for match in round_results[round_num-2]:
                     player_points[match['loser']] += points_structure['semifinalist']
             
-            # Calculate current rankings
-            current_ranking = np.argsort(player_points)[::-1]
+            # Calculate current ranking based on points
+            current_ranking = np.argsort(player_points)[::-1]  # Descending order
             
+            # Store tournament data for correlation tracking
             season_data.append({
                 'tournament': tournament_num + 1,
                 'winner': winner,
@@ -223,39 +246,38 @@ class ComprehensiveTennisAnalysis:
         }
     
     def analyze_question_1_comprehensive(self, num_simulations=200, num_players=64):
-        """
-        Question 1: How does Beta(2,5) skill distribution affect final season rankings?
-        Run multiple complete seasons with detailed tracking
-        """
+        # Question 1: How does Beta(2,5) skill distribution affect final season rankings?
+        # Enhanced with seeding heuristic for realistic tournament organization
         print("Analyzing Question 1: Skill Distribution Effects")
         print("=" * 60)
         
-        # Generate fixed skill distribution for consistency
+        # Use same skill distribution across all simulations for fair comparison
         skills = self.generate_beta_skills(num_players)
         true_skill_ranking = np.argsort(skills)[::-1]  # Best to worst by skill
         
-        # Multiple season simulations
         season_results = []
-        correlation_evolution = []
+        correlation_evolution = []  # Track how correlation improves during season
         
+        # Run multiple season simulations with seeding heuristic
         for sim in range(num_simulations):
             if sim % 50 == 0:
                 print(f"Running simulation {sim+1}/{num_simulations}")
             
-            # Simulate season with 12 tournaments
+            # Simulate 12-tournament season with seeded brackets (realistic format)
             season_result = self.simulate_season(skills, num_tournaments=12, sets_to_win=2)
             
             # Calculate final skill-ranking correlation
             final_ranking = season_result['final_ranking']
             
-            # Create ranking scores (higher = better ranking)
+            # Convert rankings to scores (higher score = better ranking)
             ranking_scores = np.zeros(num_players)
             for i, player in enumerate(final_ranking):
                 ranking_scores[player] = num_players - i
             
+            # Calculate Pearson correlation between skills and ranking scores
             correlation, p_value = pearsonr(skills, ranking_scores)
             
-            # Track how correlation evolves during season
+            # Track correlation evolution throughout the season
             tournament_correlations = []
             for tournament_data in season_result['season_data']:
                 current_ranking = tournament_data['current_ranking']
@@ -268,7 +290,7 @@ class ComprehensiveTennisAnalysis:
             
             correlation_evolution.append(tournament_correlations)
             
-            # Analyze top skill representation in top rankings
+            # Analyze how well top skilled players appear in top rankings
             top_n_values = [5, 10, 15, 20]
             top_skill_representation = {}
             
@@ -278,6 +300,7 @@ class ComprehensiveTennisAnalysis:
                 overlap = len(top_skill_players & top_ranked_players)
                 top_skill_representation[f'top_{top_n}'] = overlap / top_n
             
+            # Store comprehensive simulation results
             season_results.append({
                 'simulation': sim,
                 'correlation': correlation,
@@ -288,7 +311,7 @@ class ComprehensiveTennisAnalysis:
                 'mean_winner_skill': np.mean([t['winner_skill'] for t in season_result['season_data']])
             })
         
-        # Statistical analysis
+        # Compute statistical summary
         correlations = [r['correlation'] for r in season_results]
         mean_correlation = np.mean(correlations)
         std_correlation = np.std(correlations)
@@ -297,6 +320,7 @@ class ComprehensiveTennisAnalysis:
         print(f"Mean skill-ranking correlation: {mean_correlation:.4f} ± {std_correlation:.4f}")
         print(f"Correlation range: [{np.min(correlations):.4f}, {np.max(correlations):.4f}]")
         
+        # Report top skill identification rates
         for top_n in [5, 10, 15, 20]:
             representations = [r['top_skill_representation'][f'top_{top_n}'] for r in season_results]
             mean_repr = np.mean(representations)
@@ -315,17 +339,16 @@ class ComprehensiveTennisAnalysis:
         }
     
     def analyze_question_2_comprehensive(self, num_simulations=150, num_players=32):
-        """
-        Question 2: What format reveals skill better - longer seasons or longer matches?
-        """
+        # Question 2: What format reveals skill better - longer seasons or longer matches?
+        # Uses seeding heuristic consistently across all formats for fair comparison
         print("\nAnalyzing Question 2: Format Effectiveness")
         print("=" * 60)
         
-        # Fixed skill distribution for fair comparison
+        # Use same skill distribution for all format comparisons
         skills = self.generate_beta_skills(num_players)
         true_skill_ranking = np.argsort(skills)[::-1]
         
-        # Define scenarios to test
+        # Define tournament format scenarios to test (all use seeding heuristic)
         scenarios = [
             {'name': 'Short_Season_Best3', 'tournaments': 6, 'sets_to_win': 2, 'description': 'Short Season (6 tournaments), Best-of-3'},
             {'name': 'Long_Season_Best3', 'tournaments': 18, 'sets_to_win': 2, 'description': 'Long Season (18 tournaments), Best-of-3'},
@@ -337,10 +360,12 @@ class ComprehensiveTennisAnalysis:
         
         scenario_results = {}
         
+        # Test each tournament format scenario
         for scenario in scenarios:
             print(f"Testing {scenario['description']}...")
             scenario_data = []
             
+            # Run multiple simulations for each scenario (all use seeding heuristic)
             for sim in range(num_simulations):
                 season_result = self.simulate_season(
                     skills, 
@@ -348,7 +373,7 @@ class ComprehensiveTennisAnalysis:
                     scenario['sets_to_win']
                 )
                 
-                # Calculate metrics
+                # Calculate skill revelation metrics
                 final_ranking = season_result['final_ranking']
                 ranking_scores = np.zeros(num_players)
                 for i, player in enumerate(final_ranking):
@@ -356,7 +381,7 @@ class ComprehensiveTennisAnalysis:
                 
                 correlation, p_value = pearsonr(skills, ranking_scores)
                 
-                # Top skill identification rates
+                # Calculate top skill identification rates
                 top_rates = {}
                 for top_n in [5, 8, 10]:
                     top_skill_players = set(true_skill_ranking[:top_n])
@@ -364,7 +389,7 @@ class ComprehensiveTennisAnalysis:
                     overlap = len(top_skill_players & top_ranked_players)
                     top_rates[f'top_{top_n}_rate'] = overlap / top_n
                 
-                # Skill diversity of winners
+                # Analyze tournament winner skill diversity
                 winner_skills = [t['winner_skill'] for t in season_result['season_data']]
                 
                 scenario_data.append({
@@ -382,21 +407,21 @@ class ComprehensiveTennisAnalysis:
                 'scenario_info': scenario
             }
         
-        # Statistical comparisons
+        # Perform statistical comparisons between formats
         print("\nFormat Comparison Results:")
         print("-" * 40)
         
-        # Compare season length effect (holding match length constant)
+        # Extract correlation data for statistical testing
         short_best3 = [r['correlation'] for r in scenario_results['Short_Season_Best3']['data']]
         long_best3 = [r['correlation'] for r in scenario_results['Long_Season_Best3']['data']]
         short_best5 = [r['correlation'] for r in scenario_results['Short_Season_Best5']['data']]
         long_best5 = [r['correlation'] for r in scenario_results['Long_Season_Best5']['data']]
         
-        # Statistical tests
+        # Test season length effects (holding match length constant)
         season_effect_best3 = ttest_ind(short_best3, long_best3)
         season_effect_best5 = ttest_ind(short_best5, long_best5)
         
-        # Compare match length effect (holding season length constant)
+        # Test match length effects (holding season length constant)
         short_match_effect = ttest_ind(short_best3, short_best5)
         long_match_effect = ttest_ind(long_best3, long_best5)
         
@@ -420,32 +445,30 @@ class ComprehensiveTennisAnalysis:
         }
 
 def create_comprehensive_analysis():
-    """
-    Run complete analysis and create detailed figures
-    """
+    # Main function to run complete analysis for both research questions
     analyzer = ComprehensiveTennisAnalysis()
     
-    # Question 1 Analysis
+    # Run Question 1 analysis: skill distribution effects
     q1_results = analyzer.analyze_question_1_comprehensive(num_simulations=200, num_players=64)
     
-    # Question 2 Analysis  
+    # Run Question 2 analysis: format effectiveness comparison
     q2_results = analyzer.analyze_question_2_comprehensive(num_simulations=150, num_players=32)
     
-    # Create comprehensive figures
+    # Generate publication-quality figures
     create_detailed_figures(q1_results, q2_results)
     
-    # Provide detailed answers
+    # Provide comprehensive research question answers
     provide_research_answers(q1_results, q2_results)
     
     return q1_results, q2_results
 
 def create_detailed_figures(q1_results, q2_results):
-    """Create comprehensive figures for both questions"""
+    # Create comprehensive figures for both research questions
     
-    # Figure 1: Skill Distribution and Correlation Evolution
+    # Figure 1: Question 1 Analysis - Skill Distribution and Correlation Evolution
     fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 12))
     
-    # Skill distribution
+    # 1a: Beta(2,5) skill distribution histogram
     skills = q1_results['skills']
     ax1.hist(skills, bins=20, alpha=0.7, density=True)
     ax1.set_xlabel('Skill Level')
@@ -454,7 +477,7 @@ def create_detailed_figures(q1_results, q2_results):
     ax1.axvline(np.mean(skills), color='red', linestyle='--', label=f'Mean: {np.mean(skills):.3f}')
     ax1.legend()
     
-    # Correlation distribution
+    # 1b: Distribution of skill-ranking correlations across simulations
     correlations = q1_results['summary_stats']['correlations']
     ax2.hist(correlations, bins=25, alpha=0.7)
     ax2.set_xlabel('Skill-Ranking Correlation')
@@ -464,7 +487,7 @@ def create_detailed_figures(q1_results, q2_results):
                 label=f'Mean: {np.mean(correlations):.3f}')
     ax2.legend()
     
-    # Correlation evolution during season
+    # 1c: How correlation evolves during season
     correlation_evolution = np.array(q1_results['correlation_evolution'])
     mean_evolution = np.mean(correlation_evolution, axis=0)
     std_evolution = np.std(correlation_evolution, axis=0)
@@ -478,7 +501,7 @@ def create_detailed_figures(q1_results, q2_results):
     ax3.set_title('Figure 1c: Correlation Evolution During Season')
     ax3.grid(True, alpha=0.3)
     
-    # Top skill representation
+    # 1d: Top skill identification rates
     top_ns = [5, 10, 15, 20]
     representations = []
     for top_n in top_ns:
@@ -497,10 +520,10 @@ def create_detailed_figures(q1_results, q2_results):
     plt.tight_layout()
     plt.show()
     
-    # Figure 2: Format Comparison
+    # Figure 2: Question 2 Analysis - Format Comparison
     fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 12))
     
-    # Prepare format comparison data
+    # Prepare data for format comparison visualization
     scenario_names = []
     mean_correlations = []
     std_correlations = []
@@ -515,7 +538,7 @@ def create_detailed_figures(q1_results, q2_results):
         # Color coding: blue for best-of-3, red for best-of-5
         colors.append('skyblue' if 'Best-of-3' in scenario_data['scenario_info']['description'] else 'lightcoral')
     
-    # Main comparison chart
+    # 2a: Main format effectiveness comparison
     bars = ax1.bar(range(len(scenario_names)), mean_correlations, yerr=std_correlations, 
                    capsize=5, color=colors, alpha=0.8)
     ax1.set_xlabel('Tournament Format')
@@ -525,18 +548,18 @@ def create_detailed_figures(q1_results, q2_results):
     ax1.set_xticklabels(scenario_names, rotation=45, ha='right')
     ax1.grid(True, alpha=0.3, axis='y')
     
-    # Add value labels on bars
+    # Add correlation values on top of bars
     for i, (bar, mean_val) in enumerate(zip(bars, mean_correlations)):
         ax1.text(bar.get_x() + bar.get_width()/2, bar.get_height() + std_correlations[i] + 0.01,
                 f'{mean_val:.3f}', ha='center', va='bottom', fontsize=9)
     
-    # Season length comparison
+    # 2b: Season length vs match length comparison
     season_lengths = [6, 12, 18]
     best3_means = []
     best5_means = []
     
+    # Extract means for each season length and match format
     for length in season_lengths:
-        # Find corresponding scenarios
         for scenario_key, scenario_data in q2_results['scenario_results'].items():
             if scenario_data['scenario_info']['tournaments'] == length:
                 correlations = [r['correlation'] for r in scenario_data['data']]
@@ -558,13 +581,14 @@ def create_detailed_figures(q1_results, q2_results):
     ax2.legend()
     ax2.grid(True, alpha=0.3, axis='y')
     
-    # Statistical significance visualization
+    # 2c: Statistical significance visualization
     tests = q2_results['statistical_tests']
     test_names = ['Season Effect\n(Best-of-3)', 'Season Effect\n(Best-of-5)', 
                   'Match Effect\n(Short Season)', 'Match Effect\n(Long Season)']
     p_values = [tests['season_effect_best3'].pvalue, tests['season_effect_best5'].pvalue,
                 tests['short_match_effect'].pvalue, tests['long_match_effect'].pvalue]
     
+    # Color bars based on statistical significance
     colors_sig = ['green' if p < 0.05 else 'red' for p in p_values]
     
     ax3.bar(range(len(test_names)), [-np.log10(p) for p in p_values], color=colors_sig, alpha=0.7)
@@ -577,7 +601,8 @@ def create_detailed_figures(q1_results, q2_results):
     ax3.legend()
     ax3.grid(True, alpha=0.3, axis='y')
     
-    # Effect sizes
+    # 2d: Effect sizes for format changes
+    # Calculate effect sizes as differences in mean correlations
     season_effect_best3 = np.mean([r['correlation'] for r in q2_results['scenario_results']['Long_Season_Best3']['data']]) - \
                          np.mean([r['correlation'] for r in q2_results['scenario_results']['Short_Season_Best3']['data']])
     season_effect_best5 = np.mean([r['correlation'] for r in q2_results['scenario_results']['Long_Season_Best5']['data']]) - \
@@ -591,6 +616,7 @@ def create_detailed_figures(q1_results, q2_results):
     effect_names = ['Season Length\n(Best-of-3)', 'Season Length\n(Best-of-5)', 
                    'Match Length\n(Short)', 'Match Length\n(Long)']
     
+    # Color effects: green for positive (improvement), red for negative
     colors_effect = ['green' if e > 0 else 'red' for e in effects]
     
     ax4.bar(range(len(effect_names)), effects, color=colors_effect, alpha=0.7)
@@ -602,7 +628,7 @@ def create_detailed_figures(q1_results, q2_results):
     ax4.set_xticklabels(effect_names, rotation=45, ha='right')
     ax4.grid(True, alpha=0.3, axis='y')
     
-    # Add value labels
+    # Add effect size values on bars
     for i, effect in enumerate(effects):
         ax4.text(i, effect + (0.001 if effect >= 0 else -0.001), f'{effect:.4f}', 
                 ha='center', va='bottom' if effect >= 0 else 'top', fontsize=9)
@@ -611,14 +637,12 @@ def create_detailed_figures(q1_results, q2_results):
     plt.show()
 
 def provide_research_answers(q1_results, q2_results):
-    """
-    Provide comprehensive answers to both research questions
-    """
+    # Provide comprehensive, detailed answers to both research questions
     print("\n" + "="*80)
     print("COMPREHENSIVE RESEARCH QUESTION ANALYSIS")
     print("="*80)
     
-    # Question 1 Analysis
+    # ========== QUESTION 1 ANALYSIS ==========
     print("\nQUESTION 1: How does Beta(2,5) skill distribution affect final season rankings?")
     print("-" * 80)
     
@@ -645,7 +669,7 @@ def provide_research_answers(q1_results, q2_results):
         std_repr = np.std(representations)
         print(f"• Top {top_n} skilled players in top {top_n} rankings: {mean_repr:.3f} ± {std_repr:.3f} ({mean_repr*100:.1f}%)")
     
-    # Correlation evolution
+    # Correlation evolution analysis
     correlation_evolution = np.array(q1_results['correlation_evolution'])
     final_correlations = correlation_evolution[:, -1]
     mid_correlations = correlation_evolution[:, len(correlation_evolution[0])//2]
@@ -656,6 +680,7 @@ def provide_research_answers(q1_results, q2_results):
     print(f"• Improvement during season: {np.mean(final_correlations) - np.mean(mid_correlations):+.4f}")
     
     print("\nCONCLUSION FOR QUESTION 1:")
+    # Classify skill revelation strength
     if np.mean(correlations) > 0.7:
         conclusion1 = "STRONG skill revelation"
     elif np.mean(correlations) > 0.5:
@@ -664,15 +689,16 @@ def provide_research_answers(q1_results, q2_results):
         conclusion1 = "WEAK skill revelation"
     
     print(f"• Beta(2,5) distribution enables {conclusion1} through tournament rankings")
+    print(f"• Seeding heuristic creates realistic tournament progression while maintaining experimental control")
     print(f"• The concentration of players at moderate skill levels creates realistic ranking challenges")
     print(f"• Rankings accurately identify elite players but struggle with mid-tier distinctions")
     print(f"• Skill revelation improves consistently throughout the season")
     
-    # Question 2 Analysis
+    # ========== QUESTION 2 ANALYSIS ==========
     print("\n\nQUESTION 2: What format reveals skill better - longer seasons or longer matches?")
     print("-" * 80)
     
-    # Extract key comparisons
+    # Extract key format comparison results
     short_best3 = np.mean([r['correlation'] for r in q2_results['scenario_results']['Short_Season_Best3']['data']])
     long_best3 = np.mean([r['correlation'] for r in q2_results['scenario_results']['Long_Season_Best3']['data']])
     short_best5 = np.mean([r['correlation'] for r in q2_results['scenario_results']['Short_Season_Best5']['data']])
@@ -705,13 +731,14 @@ def provide_research_answers(q1_results, q2_results):
     print(f"• Statistical significance (Long): p = {q2_results['statistical_tests']['long_match_effect'].pvalue:.4f}")
     
     print("\nCOMPARATIVE ANALYSIS:")
+    # Calculate average effect sizes
     avg_season_effect = (abs(season_effect_best3) + abs(season_effect_best5)) / 2
     avg_match_effect = (abs(match_effect_short) + abs(match_effect_long)) / 2
     
     print(f"• Average season length effect size: {avg_season_effect:.4f}")
     print(f"• Average match length effect size: {avg_match_effect:.4f}")
     
-    # Determine which is more effective
+    # Determine which strategy is more effective
     if avg_season_effect > avg_match_effect:
         better_strategy = "LONGER SEASONS"
         effect_ratio = avg_season_effect / avg_match_effect
@@ -722,7 +749,7 @@ def provide_research_answers(q1_results, q2_results):
     print(f"• More effective strategy: {better_strategy}")
     print(f"• Effect size ratio: {effect_ratio:.2f}x larger")
     
-    # Check statistical significance
+    # Check statistical significance across all tests
     significant_tests = 0
     total_tests = 4
     if q2_results['statistical_tests']['season_effect_best3'].pvalue < 0.05:
@@ -740,7 +767,7 @@ def provide_research_answers(q1_results, q2_results):
     
     print("\nFINAL CONCLUSION FOR QUESTION 2:")
     
-    # Determine the best overall format
+    # Determine the best overall tournament format
     best_format = max(q2_results['scenario_results'].keys(), 
                      key=lambda x: np.mean([r['correlation'] for r in q2_results['scenario_results'][x]['data']]))
     best_correlation = np.mean([r['correlation'] for r in q2_results['scenario_results'][best_format]['data']])
@@ -748,8 +775,10 @@ def provide_research_answers(q1_results, q2_results):
     
     print(f"• BEST OVERALL FORMAT: {best_description}")
     print(f"• Best format correlation: {best_correlation:.4f}")
+    print(f"• Tournament seeding heuristic ensures consistent experimental conditions across all formats")
     print(f"• Primary recommendation: {better_strategy} provide {effect_ratio:.1f}x more skill revelation improvement")
     
+    # Provide evidence strength assessment
     if avg_season_effect > 0.01:
         print(f"• STRONG EVIDENCE: Longer seasons significantly improve skill revelation")
     elif avg_match_effect > 0.01:
@@ -759,21 +788,25 @@ def provide_research_answers(q1_results, q2_results):
     
     print(f"• Practical implication: Tournament organizers should prioritize {better_strategy.lower()}")
     
+    # ========== MODEL VALIDATION SUMMARY ==========
     print("\n" + "="*80)
     print("COMPUTATIONAL MODEL VALIDATION:")
     print("="*80)
-    print(f"• Total simulations run: {len(q1_results['season_results']) + sum(len(data['data']) for data in q2_results['scenario_results'].values())}")
+    total_simulations = len(q1_results['season_results']) + sum(len(data['data']) for data in q2_results['scenario_results'].values())
+    print(f"• Total simulations run: {total_simulations}")
     print(f"• Question 1 simulations: {len(q1_results['season_results'])} complete seasons")
     print(f"• Question 2 simulations: {len(q2_results['scenario_results'])} scenarios × 150 seasons each")
+    print(f"• Seeding heuristic: Applied consistently across all simulations for experimental control")
     print(f"• Statistical power: High (p-values reliable)")
     print(f"• Effect size detection: Sensitive to differences > 0.005 correlation units")
 
 if __name__ == "__main__":
-    # Run comprehensive analysis
+    # Main execution block
     print("Starting comprehensive tennis season analysis...")
     print("This will simulate thousands of seasons to answer both research questions.")
     print("Expected runtime: 3-5 minutes\n")
     
+    # Run complete analysis
     q1_results, q2_results = create_comprehensive_analysis()
     
     print("\nAnalysis complete! Check the generated figures and detailed results above.")
